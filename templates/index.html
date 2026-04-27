@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Calendar Scheduler</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: #0f0f0f; color: #e5e5e5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .glass { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .tag-affiliatenetwork { background: #ca8a0420; color: #fbbf24; border: 1px solid #ca8a0440; }
+    .tag-nokt { background: #dc262620; color: #f87171; border: 1px solid #dc262640; }
+    .tag-spermworms { background: #ea580c20; color: #fb923c; border: 1px solid #ea580c40; }
+    .tag-workout { background: #1d4ed820; color: #60a5fa; border: 1px solid #1d4ed840; }
+    .tag-networking { background: #7c3aed20; color: #a78bfa; border: 1px solid #7c3aed40; }
+    .tag-career { background: #37415120; color: #9ca3af; border: 1px solid #37415140; }
+    .tag-life { background: #16a34a20; color: #4ade80; border: 1px solid #16a34a40; }
+    .event-card { transition: all 0.15s ease; }
+    .event-card:hover { background: rgba(255,255,255,0.08); }
+    .event-card.removed { opacity: 0.3; text-decoration: line-through; }
+    textarea { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: #e5e5e5; resize: vertical; }
+    textarea:focus { outline: none; border-color: rgba(255,255,255,0.4); }
+    input[type="date"] { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: #e5e5e5; }
+    input[type="date"]:focus { outline: none; border-color: rgba(255,255,255,0.4); }
+    .btn-primary { background: #fff; color: #000; font-weight: 600; transition: opacity 0.15s; }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-confirm { background: #16a34a; color: #fff; font-weight: 600; transition: opacity 0.15s; }
+    .btn-confirm:hover { opacity: 0.85; }
+    .spinner { border: 2px solid rgba(255,255,255,0.1); border-top-color: #fff; border-radius: 50%; width: 16px; height: 16px; animation: spin 0.7s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    ::-webkit-calendar-picker-indicator { filter: invert(1); }
+    .priority-high { border-left: 3px solid #f87171; }
+    .priority-medium { border-left: 3px solid #fbbf24; }
+    .priority-low { border-left: 3px solid #6b7280; }
+  </style>
+</head>
+<body class="min-h-screen p-6">
+
+  <div class="max-w-3xl mx-auto">
+
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-2xl font-bold text-white mb-1">AI Calendar Scheduler</h1>
+      <p class="text-sm text-gray-400">Paste your to-dos, pick a date range, and let Claude build your schedule.</p>
+    </div>
+
+    <!-- Input Panel -->
+    <div id="input-panel" class="glass rounded-2xl p-6 mb-6">
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Start Date</label>
+          <input type="date" id="start-date" class="w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1 uppercase tracking-wide">End Date</label>
+          <input type="date" id="end-date" class="w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Timezone</label>
+        <select id="timezone" class="w-full rounded-lg px-3 py-2 text-sm bg-transparent border border-white/15 text-gray-200 focus:outline-none focus:border-white/40">
+          <option value="America/New_York">America/New_York (ET)</option>
+          <option value="America/Chicago">America/Chicago (CT)</option>
+          <option value="America/Denver">America/Denver (MT)</option>
+          <option value="America/Los_Angeles">America/Los_Angeles (PT)</option>
+        </select>
+      </div>
+
+      <div class="mb-5">
+        <label class="block text-xs text-gray-400 mb-1 uppercase tracking-wide">To-Do List</label>
+        <textarea
+          id="todos"
+          rows="12"
+          class="w-full rounded-lg px-3 py-2 text-sm leading-relaxed"
+          placeholder="Paste your to-dos here. Use categories like:
+
+NOKT:
+* Setup script system
+* Cut low performing creators
+
+AffiliateNetwork:
+* Circle back with Christian @ 10am
+* Setup SOP for VA
+
+Life:
+* Order cake
+* Pick up headphones"
+        ></textarea>
+      </div>
+
+      <button id="schedule-btn" onclick="scheduleTodos()" class="btn-primary w-full py-3 rounded-xl text-sm flex items-center justify-center gap-2">
+        <span id="btn-text">Generate Schedule</span>
+        <span id="btn-spinner" class="spinner hidden"></span>
+      </button>
+    </div>
+
+    <!-- Results Panel -->
+    <div id="results-panel" class="hidden">
+
+      <!-- Stats bar -->
+      <div id="stats-bar" class="glass rounded-xl px-5 py-3 mb-4 flex items-center justify-between text-sm">
+        <span class="text-gray-300"><span id="event-count" class="text-white font-semibold">0</span> events scheduled</span>
+        <span class="text-gray-400 text-xs" id="date-range-label"></span>
+      </div>
+
+      <!-- Event list -->
+      <div id="events-list" class="glass rounded-2xl overflow-hidden mb-4"></div>
+
+      <!-- Actions -->
+      <div class="flex gap-3">
+        <button onclick="resetForm()" class="flex-1 py-3 rounded-xl text-sm border border-white/20 text-gray-300 hover:bg-white/5 transition">
+          ← Start Over
+        </button>
+        <button id="confirm-btn" onclick="confirmSchedule()" class="btn-confirm flex-2 px-8 py-3 rounded-xl text-sm flex items-center justify-center gap-2">
+          <span id="confirm-text">Add to Google Calendar</span>
+          <span id="confirm-spinner" class="spinner hidden" style="border-top-color:#fff"></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Success Panel -->
+    <div id="success-panel" class="hidden glass rounded-2xl p-8 text-center">
+      <div class="text-4xl mb-3">🗓️</div>
+      <h2 class="text-xl font-semibold text-white mb-2">Schedule Added!</h2>
+      <p class="text-gray-400 text-sm mb-6" id="success-msg"></p>
+      <button onclick="resetForm()" class="btn-primary px-8 py-3 rounded-xl text-sm">Schedule More</button>
+    </div>
+
+  </div>
+
+  <script>
+    let scheduledEvents = [];
+    let removedIndexes = new Set();
+
+    // Set default dates to today + 5 days
+    const today = new Date();
+    const fiveDays = new Date(today);
+    fiveDays.setDate(today.getDate() + 5);
+    document.getElementById('start-date').value = today.toISOString().split('T')[0];
+    document.getElementById('end-date').value = fiveDays.toISOString().split('T')[0];
+
+    const CATEGORY_LABELS = {
+      affiliatenetwork: 'Affiliate Network',
+      nokt: 'NOKT',
+      spermworms: 'Spermworms',
+      workout: 'Workout',
+      networking: 'Networking',
+      career: 'Career',
+      life: 'Life',
+    };
+
+    function formatTime(iso) {
+      const d = new Date(iso);
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+
+    function formatDate(iso) {
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+
+    function getDurationMins(start, end) {
+      return Math.round((new Date(end) - new Date(start)) / 60000);
+    }
+
+    function renderEvents(events) {
+      const container = document.getElementById('events-list');
+      let currentDate = '';
+      let html = '';
+
+      events.forEach((ev, i) => {
+        const date = formatDate(ev.start);
+        const cat = (ev.category || 'life').toLowerCase().replace(/\s+/g,'');
+        const label = CATEGORY_LABELS[cat] || ev.category || 'Other';
+        const dur = getDurationMins(ev.start, ev.end);
+        const removed = removedIndexes.has(i);
+
+        if (date !== currentDate) {
+          if (currentDate) html += '</div>';
+          currentDate = date;
+          html += `<div class="border-b border-white/10 last:border-0">
+            <div class="px-5 py-2 bg-white/5 text-xs font-semibold text-gray-400 uppercase tracking-wider">${date}</div>
+          </div><div>`;
+        }
+
+        html += `
+          <div class="event-card px-5 py-3 border-b border-white/5 last:border-0 priority-${ev.priority || 'medium'} flex items-start justify-between gap-3 ${removed ? 'removed' : ''}" id="event-${i}">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1 flex-wrap">
+                <span class="text-sm font-medium text-white truncate">${ev.summary}</span>
+                <span class="tag tag-${cat}">${label}</span>
+              </div>
+              <div class="text-xs text-gray-400">
+                ${formatTime(ev.start)} – ${formatTime(ev.end)}
+                <span class="text-gray-600 mx-1">·</span>
+                ${dur} min
+                ${ev.notes ? `<span class="text-gray-600 mx-1">·</span><span class="text-gray-500">${ev.notes}</span>` : ''}
+              </div>
+            </div>
+            <button onclick="toggleEvent(${i})" class="text-gray-600 hover:text-gray-300 transition text-lg leading-none mt-0.5 flex-shrink-0" title="${removed ? 'Add back' : 'Remove'}">
+              ${removed ? '＋' : '×'}
+            </button>
+          </div>`;
+      });
+
+      if (currentDate) html += '</div>';
+      container.innerHTML = html;
+
+      const active = events.length - removedIndexes.size;
+      document.getElementById('event-count').textContent = active;
+    }
+
+    function toggleEvent(i) {
+      if (removedIndexes.has(i)) {
+        removedIndexes.delete(i);
+      } else {
+        removedIndexes.add(i);
+      }
+      renderEvents(scheduledEvents);
+    }
+
+    async function scheduleTodos() {
+      const todos = document.getElementById('todos').value.trim();
+      const startDate = document.getElementById('start-date').value;
+      const endDate = document.getElementById('end-date').value;
+      const timezone = document.getElementById('timezone').value;
+
+      if (!todos) return alert('Please enter your to-do list.');
+      if (!startDate || !endDate) return alert('Please select a date range.');
+
+      const btn = document.getElementById('schedule-btn');
+      btn.disabled = true;
+      document.getElementById('btn-text').textContent = 'Scheduling...';
+      document.getElementById('btn-spinner').classList.remove('hidden');
+
+      try {
+        const res = await fetch('/api/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ todos, start_date: startDate, end_date: endDate, timezone }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Scheduling failed');
+        }
+
+        const data = await res.json();
+        scheduledEvents = data.events;
+        removedIndexes = new Set();
+
+        document.getElementById('input-panel').classList.add('hidden');
+        document.getElementById('results-panel').classList.remove('hidden');
+        document.getElementById('date-range-label').textContent =
+          `${startDate} → ${endDate}`;
+
+        renderEvents(scheduledEvents);
+
+      } catch (e) {
+        alert('Error: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        document.getElementById('btn-text').textContent = 'Generate Schedule';
+        document.getElementById('btn-spinner').classList.add('hidden');
+      }
+    }
+
+    async function confirmSchedule() {
+      const timezone = document.getElementById('timezone').value;
+      const eventsToCreate = scheduledEvents.filter((_, i) => !removedIndexes.has(i));
+
+      if (eventsToCreate.length === 0) return alert('No events to add.');
+
+      const btn = document.getElementById('confirm-btn');
+      btn.disabled = true;
+      document.getElementById('confirm-text').textContent = 'Adding to Calendar...';
+      document.getElementById('confirm-spinner').classList.remove('hidden');
+
+      try {
+        const res = await fetch('/api/confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ events: eventsToCreate, timezone }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Failed to create events');
+        }
+
+        const data = await res.json();
+        document.getElementById('results-panel').classList.add('hidden');
+        document.getElementById('success-panel').classList.remove('hidden');
+        document.getElementById('success-msg').textContent =
+          `${data.count} events added to your Google Calendar.`;
+
+      } catch (e) {
+        alert('Error: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        document.getElementById('confirm-text').textContent = 'Add to Google Calendar';
+        document.getElementById('confirm-spinner').classList.add('hidden');
+      }
+    }
+
+    function resetForm() {
+      document.getElementById('input-panel').classList.remove('hidden');
+      document.getElementById('results-panel').classList.add('hidden');
+      document.getElementById('success-panel').classList.add('hidden');
+      scheduledEvents = [];
+      removedIndexes = new Set();
+    }
+  </script>
+</body>
+</html>
