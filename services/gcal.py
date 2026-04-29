@@ -18,6 +18,8 @@ COLOR_MAP = {
 
 
 def get_calendar_service():
+    from google.auth.transport.requests import Request
+
     creds = Credentials(
         token=None,
         refresh_token=os.getenv("GOOGLE_REFRESH_TOKEN"),
@@ -26,6 +28,8 @@ def get_calendar_service():
         token_uri="https://oauth2.googleapis.com/token",
         scopes=SCOPES,
     )
+    # Force a token refresh so we have a valid access token
+    creds.refresh(Request())
     return build("calendar", "v3", credentials=creds)
 
 
